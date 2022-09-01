@@ -4,13 +4,14 @@ import h from "virtual-dom/h";
 import diff from "virtual-dom/diff";
 import patch from "virtual-dom/patch";
 import InlineWorker from "inline-worker";
-
-import { pixelsToSeconds } from "./utils/conversions";
+import { secondsToPixels, pixelsToSeconds } from "./utils/conversions";
 import { resampleAudioBuffer } from "./utils/audioData";
 import LoaderFactory from "./track/loader/LoaderFactory";
 import ScrollHook from "./render/ScrollHook";
+import VolumeSliderHook from "./render/VolumeSliderHook";
 import TimeScale from "./TimeScale";
 import Track from "./Track";
+import Lane from "./Lane";
 import Playout from "./Playout";
 import AnnotationList from "./annotation/AnnotationList";
 
@@ -20,6 +21,7 @@ import ExportWavWorkerFunction from "./utils/exportWavWorker";
 export default class {
   constructor() {
     this.tracks = [];
+    this.lanes = [];
     this.soloedTracks = [];
     this.mutedTracks = [];
     this.collapsedTracks = [];
@@ -241,6 +243,13 @@ export default class {
         }
       }
       track.setStartTime(newStartTime);
+      this.lanes.forEach((lane) => {
+        const endTime =
+          lane.tracks.length > 0
+            ? Math.max(...lane.tracks.map((track) => track.endTime))
+            : 0;
+        lane.setEndTime(endTime);
+      });
       this.adjustDuration();
       this.drawRequest();
     });
@@ -527,6 +536,21 @@ export default class {
       }
       this.drawRequest();
     });
+
+    ee.on("setNumberLanes", (numberLanes) => {
+      this.setNumberLanes(numberLanes);
+    });
+
+    ee.on("handleTrackLaneChange", (obj) => {
+      const track = this.getTrackByCustomID(obj.trackId);
+      const oldLane = this.getLaneByID(track.lane);
+      const newLane = this.getLaneByID(obj.laneId);
+      track.setLane(newLane.id);
+      oldLane.removeTrack(track);
+      newLane.addTrack(track);
+      this.adjustDuration();
+      this.drawRequest();
+    });
   }
 
   load(trackList, event = "none") {
@@ -562,6 +586,7 @@ export default class {
           const muted = info.muted || false;
           const soloed = info.soloed || false;
           const selection = info.selected;
+          const lane = info.lane;
           const customID = info.customID || undefined;
           const peaks = info.peaks || { type: "WebAudio", mono: this.mono };
           const customClass = info.customClass || undefined;
@@ -580,6 +605,7 @@ export default class {
           track.src =
             info.src instanceof Blob ? URL.createObjectURL(info.src) : info.src;
           track.setBuffer(audioBuffer);
+          track.setLane(lane);
           track.setCustomID(customID);
           track.setName(name);
           track.setEventEmitter(this.ee);
@@ -632,6 +658,20 @@ export default class {
         });
 
         this.tracks = this.tracks.concat(tracks);
+
+        this.tracks.forEach((track) => {
+          const found = this.lanes.some((lane) => lane.id === track.lane);
+          if (!found) {
+            const lane = new Lane();
+            lane.setName(`Track-${track.lane}`);
+            lane.setId(track.lane);
+            lane.setEventEmitter(this.ee);
+            lane.setDuration(track.duration);
+            lane.setEndTime(track.endTime);
+            lane.addTrack(track);
+            this.lanes.push(lane);
+          }
+        });
         this.adjustDuration();
         this.draw(this.render());
 
@@ -717,6 +757,16 @@ export default class {
     this.setActiveTrack(track);
 
     this.ee.emit("audiosourcesrendered");
+  }
+
+  getLaneByID(id) {
+    let laneInfo = undefined;
+    this.lanes.forEach((lane) => {
+      if (lane.id === id) {
+        laneInfo = lane;
+      }
+    });
+    return laneInfo;
   }
 
   getTrackByCustomID(customID) {
@@ -928,6 +978,15 @@ export default class {
     }
   }
 
+  renameLane({ lane, event }) {
+    if (event.key === "Enter") {
+      if (event.target.innerText) lane.name = event.target.innerText;
+      else event.target.innerText = lane.name;
+      event.target.blur();
+      lane.setName(event.target.innerText);
+    }
+  }
+
   adjustTrackPlayout() {
     this.tracks.forEach((track) => {
       track.setShouldPlay(this.shouldTrackPlay(track));
@@ -1091,15 +1150,15 @@ export default class {
   clear() {
     return this.stop().then(() => {
       this.tracks = [];
+      this.laneElements = [];
       this.soloedTracks = [];
       this.mutedTracks = [];
       this.playoutPromises = [];
-
       this.cursor = 0;
       this.playbackSeconds = 0;
       this.duration = 0;
       this.scrollLeft = 0;
-
+      this.lanes = [];
       this.seek(0, 0, undefined);
     });
   }
@@ -1118,6 +1177,19 @@ export default class {
     });
 
     this.playoutPromises = playoutPromises;
+  }
+
+  setNumberLanes(numberLanes) {
+    const found = this.lanes.some((lane) => lane.id === numberLanes);
+    if (!found) {
+      const lane = new Lane();
+      lane.setName(`Track-${numberLanes}`);
+      lane.setId(numberLanes);
+      lane.setEventEmitter(this.ee);
+      this.lanes.push(lane);
+      this.adjustDuration();
+      this.drawRequest();
+    }
   }
 
   startAnimation(startTime) {
@@ -1168,6 +1240,7 @@ export default class {
       this.playbackSeconds = playbackSeconds;
       this.draw(this.render());
       this.lastDraw = currentTime;
+      this.ee.emit("audiosourcesrendered");
     } else {
       if (
         cursorPos + elapsed >=
@@ -1185,6 +1258,7 @@ export default class {
 
         this.playbackSeconds = 0;
         this.draw(this.render());
+        this.ee.emit("audiosourcesrendered");
       }, 0);
     }
   }
@@ -1192,6 +1266,7 @@ export default class {
   drawRequest() {
     window.requestAnimationFrame(() => {
       this.draw(this.render());
+      this.ee.emit("audiosourcesrendered");
     });
     this.getTrackByCustomID();
   }
@@ -1255,33 +1330,72 @@ export default class {
     return timeScale.render();
   }
 
-  renderTrackSection() {
-    const trackElements = this.tracks
+  renderLanes(lanes) {
+    const lanesObject = [];
+    lanes.forEach((lane) => {
+      lanesObject.push(this.renderLane(lane));
+    });
+    return h(`div.lanes`, {}, lanesObject);
+  }
+
+  renderLane(lane) {
+    const laneChildren = this.tracks
       .sort((a, b) =>
         a.customID > b.customID ? 1 : b.customID > a.customID ? -1 : 0
       )
       .map((track) => {
-        const collapsed = this.collapsedTracks.indexOf(track) > -1;
-        return track.render(
-          this.getTrackRenderData({
-            isActive: this.isActiveTrack(track),
-            shouldPlay: this.shouldTrackPlay(track),
-            soloed: this.soloedTracks.indexOf(track) > -1,
-            muted: this.mutedTracks.indexOf(track) > -1,
-            collapsed,
-            height: collapsed ? this.collapsedWaveHeight : this.waveHeight,
-            barGap: this.barGap,
-            barWidth: this.barWidth,
-          })
-        );
+        if (track.lane === lane.id) {
+          const collapsed = this.collapsedTracks.indexOf(track) > -1;
+          return track.render(
+            this.getTrackRenderData({
+              isActive: this.isActiveTrack(track),
+              shouldPlay: this.shouldTrackPlay(track),
+              soloed: this.soloedTracks.indexOf(track) > -1,
+              muted: this.mutedTracks.indexOf(track) > -1,
+              collapsed,
+              height: collapsed ? this.collapsedWaveHeight : this.waveHeight,
+              barGap: this.barGap,
+              barWidth: this.barWidth,
+            })
+          );
+        }
       });
+    const laneOverlay = h(`div.lane-overlay`, {
+      attributes: {
+        style: `height: 100%; width: 100%; position: absolute; top: 0; left: 0; pointer-events: 0;`,
+        laneId: lane.id,
+      },
+    });
+    laneChildren.push(laneOverlay);
+    return h(`div.lane.lane-${lane.id}`, {}, laneChildren);
+  }
+
+  removeLane(lane) {
+    if (lane.tracks.length > 0) {
+      lane.tracks.forEach((track) => {
+        this.removeTrack(track);
+      });
+    }
+    const index = this.lanes.indexOf(lane);
+    if (index > -1) {
+      this.lanes.splice(index, 1);
+    }
+    if (this.lanes.length === 0) {
+      this.tracks.forEach((track) => {
+        this.removeTrack(track);
+      });
+    }
+    this.adjustDuration();
+    this.adjustTrackPlayout();
+    this.drawRequest();
+  }
+
+  renderTrackSection() {
+    const lanesElement = this.renderLanes(this.lanes);
 
     return h(
       "div.playlist-tracks",
       {
-        attributes: {
-          style: "overflow: auto;",
-        },
         onscroll: (e) => {
           this.scrollLeft = pixelsToSeconds(
             e.target.scrollLeft,
@@ -1293,22 +1407,155 @@ export default class {
         },
         hook: new ScrollHook(this),
       },
-      trackElements
+      lanesElement
+    );
+  }
+
+  renderLaneControls(lane) {
+    const muteClass = lane.muted ? ".active" : "";
+    const soloClass = lane.soloed ? ".active" : "";
+
+    const trackName = h(
+      "div.single-line",
+      {
+        attributes: {
+          contentEditable: true,
+        },
+        onkeypress: (e) => {
+          this.renameLane({ lane: lane, event: e });
+        },
+      },
+      [lane.name]
+    );
+    const removeTrack = h(
+      "button.btn.btn-danger.btn-xs.track-remove",
+      {
+        attributes: {
+          type: "button",
+          title: "Remove track",
+        },
+        onclick: () => {
+          this.removeLane(lane);
+        },
+      },
+      [h("i.fas.fa-times")]
+    );
+    const headerChildren = [];
+    headerChildren.push(removeTrack);
+    headerChildren.push(trackName);
+    const controls = [h("div.track-header", headerChildren)];
+
+    controls.push(
+      h("div.btn-group", [
+        h(
+          `button.btn.btn-outline-dark.btn-xs.btn-mute${muteClass}`,
+          {
+            attributes: {
+              type: "button",
+            },
+            onclick: () => {
+              lane.muted ? lane.setMuted(false) : lane.setMuted(true);
+              this.drawRequest();
+            },
+          },
+          ["Mute"]
+        ),
+        h(
+          `button.btn.btn-outline-dark.btn-xs.btn-solo${soloClass}`,
+          {
+            onclick: (evt) => {},
+          },
+          ["Solo"]
+        ),
+      ])
+    );
+    controls.push(
+      h("label.volume", [
+        h("input.volume-slider", {
+          attributes: {
+            "aria-label": "Track volume control",
+            type: "range",
+            min: 0,
+            max: 100,
+            value: 100,
+          },
+          hook: new VolumeSliderHook(lane.gain),
+          oninput: (e) => {
+            lane.setGainLevel(e.target.value / 100);
+            this.drawRequest();
+          },
+        }),
+      ])
+    );
+    return h(
+      "div.controls",
+      {
+        attributes: {
+          style: `height: ${125}px; width: ${125}px;z-index: 10;`,
+        },
+      },
+      controls
+    );
+  }
+
+  renderFixed() {
+    const fixedChildren = [];
+
+    this.lanes.forEach((lane) => {
+      fixedChildren.push(this.renderLaneControls(lane));
+    });
+
+    return h(
+      "div.playlist-fixed",
+      {
+        attributes: {
+          style: "overflow: hidden; position: relative;",
+        },
+      },
+      fixedChildren
+    );
+  }
+
+  renderScrollable() {
+    const scrollableChildren = [];
+    const playbackX = secondsToPixels(
+      this.playbackSeconds,
+      this.samplesPerPixel,
+      this.sampleRate
+    );
+
+    const cursor = h("div.playback-indicator", {
+      attributes: {
+        style: `position: absolute; width: 2px; height: calc(100% - 27px); margin: 0; padding: 0; top: 27px; left: calc(20px + ${playbackX}px); bottom: 0; z-index: 14; background: #f2765d; cursor: grab;`,
+      },
+    });
+
+    if (this.showTimescale) {
+      scrollableChildren.push(this.renderTimeScale());
+    }
+    scrollableChildren.push(cursor);
+
+    scrollableChildren.push(this.renderTrackSection());
+
+    if (this.annotationList.length) {
+      scrollableChildren.push(this.renderAnnotations());
+    }
+    return h(
+      "div.playlist-scrollable",
+      {
+        attributes: {
+          style: "position: relative;",
+        },
+      },
+      scrollableChildren
     );
   }
 
   render() {
     const containerChildren = [];
 
-    if (this.showTimescale) {
-      containerChildren.push(this.renderTimeScale());
-    }
-
-    containerChildren.push(this.renderTrackSection());
-
-    if (this.annotationList.length) {
-      containerChildren.push(this.renderAnnotations());
-    }
+    containerChildren.push(this.renderFixed());
+    containerChildren.push(this.renderScrollable());
 
     return h(
       "div.playlist",
@@ -1330,6 +1577,7 @@ export default class {
 
     return {
       tracks,
+      lanes: this.lanes,
       effects: this.effectsGraph,
     };
   }
