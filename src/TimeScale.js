@@ -1,6 +1,6 @@
 import h from "virtual-dom/h";
 
-import {secondsToPixels} from "./utils/conversions";
+import { secondsToPixels } from "./utils/conversions";
 import TimeScaleHook from "./render/TimeScaleHook";
 
 class TimeScale {
@@ -161,9 +161,7 @@ class TimeScale {
           style: `position: relative; left: 0; right: 0; margin-left: ${this.marginLeft}px;`,
         },
       },
-      [
-        timeMarkers
-      ]
+      [timeMarkers]
     );
   }
 }

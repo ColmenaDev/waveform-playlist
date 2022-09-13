@@ -9,6 +9,7 @@ export default class {
     this.customClass = undefined;
     this.gain = 1;
     this.volume = 1;
+    this.color = "";
     this.muted = false;
     this.soloed = false;
     this.duration = 0;
@@ -26,6 +27,10 @@ export default class {
 
   setName(name) {
     this.name = name;
+  }
+
+  setColor(color) {
+    this.color = color;
   }
 
   setMuted(bool) {

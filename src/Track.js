@@ -94,6 +94,84 @@ export default class {
     }
   }
 
+  createArrayBuffer(point1, point2, audioContext) {
+    let newArrayBuffer;
+    const trackStart = this.getStartTime();
+    const trackEnd = this.getEndTime();
+
+    let start = point1;
+    let end = point2;
+
+    let timeSplitOffset = start - this.getStartTime();
+    if (timeSplitOffset < 0) {
+      // outside interval left
+      timeSplitOffset = 0;
+    }
+    const firstPartPercentage = timeSplitOffset / this.duration;
+
+    const secondTimeSplitOffset = end - this.getStartTime();
+    let secondPartPercentage =
+      (this.duration - secondTimeSplitOffset) / this.duration;
+    if (secondPartPercentage < 0) {
+      // outside interval right
+      secondPartPercentage = 0;
+    }
+
+    if (start <= trackEnd && end >= trackStart) {
+      const channels = this.buffer.numberOfChannels;
+      const firstPartNewLength = firstPartPercentage * this.buffer.length;
+      const secondPartNewLength = secondPartPercentage * this.buffer.length;
+      try {
+        newArrayBuffer = audioContext.createBuffer(
+          channels,
+          firstPartNewLength + secondPartNewLength,
+          this.buffer.sampleRate
+        );
+        const arrayFirstPart = new Float32Array(firstPartNewLength);
+        const arraySecondPart = new Float32Array(secondPartNewLength);
+
+        for (let channel = 0; channel < channels; channel++) {
+          this.buffer.copyFromChannel(arrayFirstPart, channel, 0);
+          this.buffer.copyFromChannel(
+            arraySecondPart,
+            channel,
+            this.buffer.length - secondPartNewLength
+          );
+          newArrayBuffer.copyToChannel(arrayFirstPart, channel, 0);
+          newArrayBuffer.copyToChannel(
+            arraySecondPart,
+            channel,
+            firstPartNewLength
+          );
+        }
+      } catch (e) {
+        // handle error here
+        throw e;
+      }
+    }
+    return newArrayBuffer;
+  }
+
+  razorCut(point, audioContext, track) {
+    const newArrayBuffer1 = this.createArrayBuffer(
+      point,
+      track.endTime,
+      audioContext
+    );
+    const newArrayBuffer2 = this.createArrayBuffer(
+      track.startTime,
+      point,
+      audioContext
+    );
+    let razorCutObject = {
+      Track: track,
+      Point: point,
+      buffer1: newArrayBuffer1,
+      buffer2: newArrayBuffer2,
+    };
+    return this.ee.emit("razorCutFinished", razorCutObject);
+  }
+
   removePart(point1, point2, audioContext, track) {
     this.ee.emit("saveCutManipulation", this.buffer, track);
 
@@ -692,13 +770,24 @@ export default class {
     ];
 
     const channels = Object.keys(this.peaks.data).map((channelNum) => {
-      const channelChildren = [
-        h("div.channel-progress", {
+      const channelChildren = [];
+      const sampleName = h(
+        `div.sample-name`,
+        {
           attributes: {
-            style: `position: absolute; width: ${progressWidth}px; height: ${data.height}px; z-index: 2;`,
+            style: `background:${data.laneColor.outer};`,
           },
-        }),
-      ];
+        },
+        [this.name]
+      );
+      const channelProgress = h("div.channel-progress", {
+        attributes: {
+          style: `position: absolute; width: ${progressWidth}px; height: ${data.height}px; z-index: 2;background:${data.laneColor.outer};`,
+        },
+      });
+
+      channelChildren.push(sampleName);
+      channelChildren.push(channelProgress);
       let offset = 0;
       let totalWidth = width;
       const peaks = this.peaks.data[channelNum];
@@ -761,7 +850,7 @@ export default class {
             "div.wp-fade.wp-fadein",
             {
               attributes: {
-                style: `position: absolute; height: ${data.height}px; width: ${fadeWidth}px; top: 0; left: 0; z-index: 4;`,
+                style: `position: absolute; height: ${data.height}px; width: ${fadeWidth}px; bottom: 0; left: 0; z-index: 4;`,
               },
             },
             [
@@ -795,7 +884,7 @@ export default class {
             "div.wp-fade.wp-fadeout",
             {
               attributes: {
-                style: `position: absolute; height: ${data.height}px; width: ${fadeWidth}px; top: 0; right: 0; z-index: 4;`,
+                style: `position: absolute; height: ${data.height}px; width: ${fadeWidth}px; bottom: 0; right: 0; z-index: 4;`,
               },
             },
             [
@@ -819,9 +908,13 @@ export default class {
         `div.channel.channel-${channelNum}`,
         {
           attributes: {
-            style: `height: ${data.height}px; width: ${width}px; top: ${
+            style: `height: calc(${
+              data.height
+            }px + 18px); width: calc(${width}px + 2px); top: ${
               channelNum * data.height
-            }px; left: ${startX}px; position: relative; margin: 0; padding: 0; z-index: 1;`,
+            }px; left: ${startX}px; position: relative; margin: 0; padding: 0; z-index: 1;border-color:${
+              data.laneColor.outer
+            };`,
             draggable: true,
             id: this.customID,
           },
@@ -832,13 +925,13 @@ export default class {
 
     const channelBefore = h(`div.channelbefore.no-pointer-events`, {
       attributes: {
-        style: `height: ${data.height}px; width: ${width}px; top: 0; left: calc(${startX}px - ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
+        style: `height: calc(${data.height}px + 16px); width: ${width}px; top: 0; left: calc(${startX}px - ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
       },
     });
 
     const channelAfter = h(`div.channelafter.no-pointer-events`, {
       attributes: {
-        style: `height: ${data.height}px; width: ${width}px; top: 0; left:calc(${startX}px + ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
+        style: `height: calc(${data.height}px + 16px); width: ${width}px; top: 0; left:calc(${startX}px + ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
       },
     });
 

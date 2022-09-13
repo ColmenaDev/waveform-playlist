@@ -22,6 +22,28 @@ export default class {
   constructor() {
     this.tracks = [];
     this.lanes = [];
+    this.defaultLaneColors = [
+      { outer: "#2188BF", inner: "#9dd2ee" },
+      { outer: "#FDD366", inner: "#feedc2" },
+      { outer: "#F2765D", inner: "#fac8be" },
+      { outer: "#75BB5C", inner: "#c8e4be" },
+      { outer: "#64D2CC", inner: "#c1edeb" },
+      { outer: "#E9659E", inner: "#f6c1d8" },
+      { outer: "#F09139", inner: "#f9d3b0" },
+      { outer: "#8B79E3", inner: "#d1c9f4" },
+      { outer: "#9F6044", inner: "#ddbeb0" },
+    ];
+    this.laneColors = [
+      { outer: "#2188BF", inner: "#9dd2ee" },
+      { outer: "#FDD366", inner: "#feedc2" },
+      { outer: "#F2765D", inner: "#fac8be" },
+      { outer: "#75BB5C", inner: "#c8e4be" },
+      { outer: "#64D2CC", inner: "#c1edeb" },
+      { outer: "#E9659E", inner: "#f6c1d8" },
+      { outer: "#F09139", inner: "#f9d3b0" },
+      { outer: "#8B79E3", inner: "#d1c9f4" },
+      { outer: "#9F6044", inner: "#ddbeb0" },
+    ];
     this.soloedTracks = [];
     this.mutedTracks = [];
     this.collapsedTracks = [];
@@ -301,7 +323,11 @@ export default class {
       this.adjustTrackPlayout();
       this.drawRequest();
     });
-
+    ee.on("removeLane", (lane) => {
+      this.removeLane(lane);
+      this.adjustTrackPlayout();
+      this.drawRequest();
+    });
     ee.on("renameTrack", (track) => {
       this.renameTrack(track);
     });
@@ -384,6 +410,12 @@ export default class {
       this.adjustDuration();
       this.drawRequest();
       this.ee.emit("cutfinished");
+    });
+
+    ee.on("razorCut", () => {
+      const Track = this.getActiveTrack();
+      const timeSelection = this.getTimeSelection();
+      Track.razorCut(timeSelection.start, this.ac, Track);
     });
 
     ee.on("loadTrackBuffer", (bufferAndTrackObject) => {
@@ -548,6 +580,7 @@ export default class {
       track.setLane(newLane.id);
       oldLane.removeTrack(track);
       newLane.addTrack(track);
+      track.setWaveOutlineColor(newLane.color.inner);
       this.adjustDuration();
       this.drawRequest();
     });
@@ -663,14 +696,21 @@ export default class {
           const found = this.lanes.some((lane) => lane.id === track.lane);
           if (!found) {
             const lane = new Lane();
+            const color = this.laneColors.shift();
+            if (this.laneColors.length === 0) {
+              this.laneColors = [...this.defaultLaneColors];
+            }
             lane.setName(`Track-${track.lane}`);
             lane.setId(track.lane);
             lane.setEventEmitter(this.ee);
+            lane.setColor(color);
             lane.setDuration(track.duration);
             lane.setEndTime(track.endTime);
             lane.addTrack(track);
             this.lanes.push(lane);
           }
+          const laneObject = this.getLaneByID(track.lane);
+          track.setWaveOutlineColor(laneObject.color.inner);
         });
         this.adjustDuration();
         this.draw(this.render());
@@ -1183,8 +1223,13 @@ export default class {
     const found = this.lanes.some((lane) => lane.id === numberLanes);
     if (!found) {
       const lane = new Lane();
+      const color = this.laneColors.shift();
+      if (this.laneColors.length === 0) {
+        this.laneColors = [...this.defaultLaneColors];
+      }
       lane.setName(`Track-${numberLanes}`);
       lane.setId(numberLanes);
+      lane.setColor(color);
       lane.setEventEmitter(this.ee);
       this.lanes.push(lane);
       this.adjustDuration();
@@ -1332,9 +1377,11 @@ export default class {
 
   renderLanes(lanes) {
     const lanesObject = [];
-    lanes.forEach((lane) => {
-      lanesObject.push(this.renderLane(lane));
-    });
+    lanes
+      .sort((a, b) => (a.id > b.id ? 1 : b.id > a.id ? -1 : 0))
+      .forEach((lane) => {
+        lanesObject.push(this.renderLane(lane));
+      });
     return h(`div.lanes`, {}, lanesObject);
   }
 
@@ -1349,6 +1396,7 @@ export default class {
           return track.render(
             this.getTrackRenderData({
               isActive: this.isActiveTrack(track),
+              laneColor: lane.color,
               shouldPlay: this.shouldTrackPlay(track),
               soloed: this.soloedTracks.indexOf(track) > -1,
               muted: this.mutedTracks.indexOf(track) > -1,
@@ -1362,12 +1410,25 @@ export default class {
       });
     const laneOverlay = h(`div.lane-overlay`, {
       attributes: {
-        style: `height: 100%; width: 100%; position: absolute; top: 0; left: 0; pointer-events: 0;`,
+        style: `height: 100%; width: 100%; position: absolute; top: 0; left: 0; pointer-events: auto;`,
         laneId: lane.id,
       },
     });
+    const channelPixels = secondsToPixels(
+      this.duration,
+      this.samplesPerPixel,
+      this.sampleRate
+    );
     laneChildren.push(laneOverlay);
-    return h(`div.lane.lane-${lane.id}`, {}, laneChildren);
+    return h(
+      `div.lane.lane-${lane.id}`,
+      {
+        attributes: {
+          style: `min-width:calc(${channelPixels}px + 40px); overflow:hidden;`,
+        },
+      },
+      laneChildren
+    );
   }
 
   removeLane(lane) {
@@ -1415,7 +1476,7 @@ export default class {
     const muteClass = lane.muted ? ".active" : "";
     const soloClass = lane.soloed ? ".active" : "";
 
-    const trackName = h(
+    const laneName = h(
       "div.single-line",
       {
         attributes: {
@@ -1427,7 +1488,7 @@ export default class {
       },
       [lane.name]
     );
-    const removeTrack = h(
+    const removeLane = h(
       "button.btn.btn-danger.btn-xs.track-remove",
       {
         attributes: {
@@ -1435,14 +1496,14 @@ export default class {
           title: "Remove track",
         },
         onclick: () => {
-          this.removeLane(lane);
+          this.ee.emit("createUndoStateAndRemoveLane", lane);
         },
       },
       [h("i.fas.fa-times")]
     );
     const headerChildren = [];
-    headerChildren.push(removeTrack);
-    headerChildren.push(trackName);
+    headerChildren.push(removeLane);
+    headerChildren.push(laneName);
     const controls = [h("div.track-header", headerChildren)];
 
     controls.push(
@@ -1487,6 +1548,13 @@ export default class {
         }),
       ])
     );
+
+    const laneColor = h(`div.lane-color`, {
+      attributes: {
+        style: `position:absolute; width:8px; height: 100%; left:-10px; top:0; border-top-left-radius:4px; border-bottom-left-radius:4px; background:${lane.color.outer}`,
+      },
+    });
+    controls.push(laneColor);
     return h(
       "div.controls",
       {
@@ -1509,7 +1577,7 @@ export default class {
       "div.playlist-fixed",
       {
         attributes: {
-          style: "overflow: hidden; position: relative;",
+          style: "position: relative;",
         },
       },
       fixedChildren
@@ -1561,7 +1629,7 @@ export default class {
       "div.playlist",
       {
         attributes: {
-          style: "overflow: hidden; position: relative;",
+          style: "position: relative;",
         },
       },
       containerChildren
