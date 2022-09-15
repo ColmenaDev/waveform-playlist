@@ -577,6 +577,18 @@ export default class {
       const track = this.getTrackByCustomID(obj.trackId);
       const oldLane = this.getLaneByID(track.lane);
       const newLane = this.getLaneByID(obj.laneId);
+      const index = this.mutedTracks.indexOf(track);
+
+      if (!newLane.muted) {
+        if (index > -1) {
+          this.mutedTracks.splice(index, 1);
+        }
+      } else {
+        if (index === -1) {
+          this.mutedTracks.push(track);
+        }
+      }
+
       track.setLane(newLane.id);
       oldLane.removeTrack(track);
       newLane.addTrack(track);
@@ -691,7 +703,6 @@ export default class {
         });
 
         this.tracks = this.tracks.concat(tracks);
-
         this.tracks.forEach((track) => {
           const found = this.lanes.some((lane) => lane.id === track.lane);
           if (!found) {
@@ -706,11 +717,18 @@ export default class {
             lane.setColor(color);
             lane.setDuration(track.duration);
             lane.setEndTime(track.endTime);
-            lane.addTrack(track);
             this.lanes.push(lane);
           }
           const laneObject = this.getLaneByID(track.lane);
           track.setWaveOutlineColor(laneObject.color.inner);
+          const lanes = this.lanes;
+          lanes.forEach((lane) => {
+            if (lane.id === laneObject.id) {
+              if (laneObject.tracks.indexOf(track) === -1) {
+                laneObject.addTrack(track);
+              }
+            }
+          });
         });
         this.adjustDuration();
         this.draw(this.render());
@@ -1001,6 +1019,12 @@ export default class {
       this.collapsedTracks,
       this.tracks,
     ];
+    const lanes = this.lanes;
+    lanes.forEach((lane) => {
+      if (lane.tracks.indexOf(track) !== -1) {
+        lane.removeTrack(track);
+      }
+    });
     trackLists.forEach((list) => {
       const index = list.indexOf(track);
       if (index > -1) {
@@ -1537,7 +1561,7 @@ export default class {
             "aria-label": "Track volume control",
             type: "range",
             min: 0,
-            max: 100,
+            max: 200,
             value: 100,
           },
           hook: new VolumeSliderHook(lane.gain),

@@ -35,6 +35,9 @@ export default class {
 
   setMuted(bool) {
     this.muted = bool;
+    this.tracks.forEach((track) => {
+      this.ee.emit("mute", track);
+    });
   }
 
   setEndTime(endTime) {
@@ -76,6 +79,9 @@ export default class {
 
   setGainLevel(level) {
     this.gain = level;
+    this.tracks.forEach((track) => {
+      this.ee.emit("volumechange", level * 100, track);
+    });
   }
 
   getLaneDetails() {

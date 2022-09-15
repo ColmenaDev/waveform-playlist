@@ -31,7 +31,6 @@ export default class {
       type: "WebAudio",
       mono: false,
     };
-
     this.cueIn = 0;
     this.cueOut = 0;
     this.duration = 0;
