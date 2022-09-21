@@ -279,6 +279,30 @@ export default class {
     ee.on("record", () => {
       this.record();
     });
+    ee.on("restoreLane", (laneObject) => {
+      const found = this.lanes.some((lane) => lane.id === laneObject.id);
+      if (!found) {
+        const lane = new Lane();
+        lane.setName(`Track-${laneObject.id}`);
+        lane.setId(laneObject.id);
+        lane.setEventEmitter(this.ee);
+        lane.setColor(laneObject.color);
+        lane.setDuration(laneObject.duration);
+        lane.setEndTime(laneObject.endTime);
+        this.lanes.push(lane);
+      }
+      this.adjustTrackPlayout();
+      this.drawRequest();
+      this.draw(this.render());
+    });
+
+    ee.on("removeTrackById", (id) => {
+      const Track = this.getTrackByCustomID(id);
+      this.removeTrack(Track);
+      this.adjustTrackPlayout();
+      this.drawRequest();
+      this.draw(this.render());
+    });
 
     ee.on("play", (start, end) => {
       this.play(start, end);
@@ -1007,7 +1031,6 @@ export default class {
       }
     }
   }
-
   removeTrack(track) {
     if (track.isPlaying()) {
       track.scheduleStop();
