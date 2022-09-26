@@ -62,6 +62,10 @@ export default class {
 
   addTrack(track) {
     this.tracks.push(track);
+    this.recalculateEndTime();
+  }
+
+  recalculateEndTime() {
     const endTime =
       this.tracks.length > 0
         ? Math.max(...this.tracks.map((track) => track.endTime))

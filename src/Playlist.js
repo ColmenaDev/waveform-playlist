@@ -58,6 +58,7 @@ export default class {
     // whether a user is scrolling the waveform
     this.isScrolling = false;
 
+    this.overlapLastCheck = false;
     this.fadeType = "logarithmic";
     this.masterGain = 1;
     this.annotations = [];
@@ -253,7 +254,7 @@ export default class {
       this.drawRequest();
     });
 
-    ee.on("shift", (deltaTime, track, lastShift) => {
+    ee.on("shift", (deltaTime, track, lastShift, trackStart) => {
       let newStartTime = track.getStartTime() + deltaTime;
       if (lastShift) {
         if (newStartTime < 0) {
@@ -263,7 +264,9 @@ export default class {
           this.pause();
           this.play();
         }
+        newStartTime = this.checkOverlap(newStartTime, trackStart, track);
       }
+
       track.setStartTime(newStartTime);
       this.lanes.forEach((lane) => {
         const endTime =
@@ -272,6 +275,7 @@ export default class {
             : 0;
         lane.setEndTime(endTime);
       });
+      this.overlapLastCheck = false;
       this.adjustDuration();
       this.drawRequest();
     });
@@ -617,6 +621,18 @@ export default class {
       oldLane.removeTrack(track);
       newLane.addTrack(track);
       track.setWaveOutlineColor(newLane.color.inner);
+      let newStartTime = this.checkOverlap(
+        track.startTime,
+        track.startTime,
+        track,
+        true
+      );
+      if (newStartTime === 0 || newStartTime < 0) {
+        track.setStartTime(newLane.endTime);
+      } else {
+        track.setStartTime(newStartTime);
+      }
+      oldLane.recalculateEndTime();
       this.adjustDuration();
       this.drawRequest();
     });
@@ -762,6 +778,66 @@ export default class {
       .catch((e) => {
         this.ee.emit("audiosourceserror", e);
       });
+  }
+
+  checkOverlap(newStartTime, oldStartTime, track, laneChange = false) {
+    const sTime = newStartTime;
+    const eTime = sTime + track.duration;
+    const trackStart = oldStartTime;
+    const trackEnd = oldStartTime + track.duration;
+    let overlapStart = false;
+    let overlapEnd = false;
+    this.lanes.forEach((lane) => {
+      if (lane.id === track.lane) {
+        lane.tracks.forEach((laneTrack) => {
+          if (track.customID !== laneTrack.customID) {
+            if (sTime < laneTrack.endTime && sTime > laneTrack.startTime) {
+              newStartTime = laneTrack.endTime;
+              overlapStart = true;
+            } else if (
+              eTime > laneTrack.startTime &&
+              sTime < laneTrack.endTime
+            ) {
+              newStartTime = laneTrack.startTime - track.duration;
+              overlapEnd = true;
+            }
+          }
+        });
+      }
+    });
+
+    let checkStartTime = newStartTime;
+    let checkEndTime = checkStartTime + track.duration;
+
+    this.lanes.forEach((lane) => {
+      if (lane.id === track.lane) {
+        lane.tracks.forEach((laneTrack) => {
+          if (track.customID !== laneTrack.customID) {
+            if (
+              checkStartTime < laneTrack.endTime &&
+              checkStartTime > laneTrack.startTime
+            ) {
+              newStartTime = laneTrack.endTime;
+              overlapStart = true;
+            } else if (
+              checkEndTime > laneTrack.startTime &&
+              checkStartTime < laneTrack.endTime
+            ) {
+              newStartTime = laneTrack.startTime - track.duration;
+              overlapEnd = true;
+            }
+          }
+        });
+      }
+    });
+
+    if (overlapEnd && overlapStart && !laneChange) {
+      newStartTime = trackStart;
+    }
+    if (overlapEnd && overlapStart && laneChange) {
+      newStartTime = 0;
+    }
+    return newStartTime;
   }
 
   createTrackFromSplit({ trackToSplit, name, splitTime }) {

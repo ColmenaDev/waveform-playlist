@@ -277,6 +277,11 @@ export default class {
     this.endTime = start + this.duration;
   }
 
+  setEndTime(end) {
+    this.endTime = end;
+    this.startTime = end - this.duration;
+  }
+
   setPlayout(playout) {
     this.playout = playout;
   }

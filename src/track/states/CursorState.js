@@ -4,6 +4,8 @@ export default class {
   constructor(track) {
     this.track = track;
     this.active = false;
+    this.trackStart = false;
+    this.trackEnd = false;
   }
 
   static getClass() {
@@ -47,7 +49,14 @@ export default class {
       Math.abs(this.startX - x)
     );
     this.prevX = x;
-    this.track.ee.emit("shift", deltaTime, this.track, lastShift);
+    this.track.ee.emit(
+      "shift",
+      deltaTime,
+      this.track,
+      lastShift,
+      this.trackStart,
+      this.trackEnd
+    );
   }
 
   complete(x) {
@@ -57,13 +66,25 @@ export default class {
       if (shiftingParentElement) {
         shiftingParentElement.classList.remove("is-shifting");
       }
+      const wrapper = document.querySelector("#waveform");
+      if (wrapper.classList.contains("dragging")) {
+        wrapper.classList.remove("dragging");
+      }
     }
     this.active = false;
+    this.trackStart = false;
+    this.trackEnd = false;
   }
 
   mousedown(e) {
     //e.preventDefault();
     this.startTime = new Date().getTime();
+    if (!this.trackStart) {
+      this.trackStart = this.track.startTime;
+    }
+    if (!this.trackEnd) {
+      this.trackEnd = this.track.endTime;
+    }
     this.active = true;
     this.el = e.target;
     this.prevX = e.offsetX;
@@ -90,6 +111,10 @@ export default class {
         const parentElement = e.target ? e.target.parentElement : undefined;
         if (parentElement && !parentElement.classList.contains("is-shifting")) {
           parentElement.classList.add("is-shifting");
+        }
+        const wrapper = document.querySelector("#waveform");
+        if (!wrapper.classList.contains("dragging")) {
+          wrapper.classList.add("dragging");
         }
         this.emitShift(e.offsetX, false);
       }
