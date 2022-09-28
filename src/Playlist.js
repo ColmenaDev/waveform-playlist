@@ -23,26 +23,22 @@ export default class {
     this.tracks = [];
     this.lanes = [];
     this.defaultLaneColors = [
-      { outer: "#2188BF", inner: "#9dd2ee" },
-      { outer: "#FDD366", inner: "#feedc2" },
-      { outer: "#F2765D", inner: "#fac8be" },
-      { outer: "#75BB5C", inner: "#c8e4be" },
-      { outer: "#64D2CC", inner: "#c1edeb" },
-      { outer: "#E9659E", inner: "#f6c1d8" },
-      { outer: "#F09139", inner: "#f9d3b0" },
-      { outer: "#8B79E3", inner: "#d1c9f4" },
-      { outer: "#9F6044", inner: "#ddbeb0" },
+      { outer: "#1031DE", inner: "#72B2D4" },
+      { outer: "#DE1098", inner: "#EA7ED8" },
+      { outer: "#DE8C10", inner: "#F8DC97" },
+      { outer: "#059814", inner: "#74D472" },
+      { outer: "#4F0598", inner: "#AF72D4" },
+      { outer: "#980505", inner: "#D4728A" },
+      { outer: "#1A9BA4", inner: "#72CFD4" },
     ];
     this.laneColors = [
-      { outer: "#2188BF", inner: "#9dd2ee" },
-      { outer: "#FDD366", inner: "#feedc2" },
-      { outer: "#F2765D", inner: "#fac8be" },
-      { outer: "#75BB5C", inner: "#c8e4be" },
-      { outer: "#64D2CC", inner: "#c1edeb" },
-      { outer: "#E9659E", inner: "#f6c1d8" },
-      { outer: "#F09139", inner: "#f9d3b0" },
-      { outer: "#8B79E3", inner: "#d1c9f4" },
-      { outer: "#9F6044", inner: "#ddbeb0" },
+      { outer: "#1031DE", inner: "#72B2D4" },
+      { outer: "#DE1098", inner: "#EA7ED8" },
+      { outer: "#DE8C10", inner: "#F8DC97" },
+      { outer: "#059814", inner: "#74D472" },
+      { outer: "#4F0598", inner: "#AF72D4" },
+      { outer: "#980505", inner: "#D4728A" },
+      { outer: "#1A9BA4", inner: "#72CFD4" },
     ];
     this.soloedTracks = [];
     this.mutedTracks = [];
@@ -619,7 +615,7 @@ export default class {
 
       track.setLane(newLane.id);
       oldLane.removeTrack(track);
-      newLane.addTrack(track);
+      oldLane.recalculateEndTime();
       track.setWaveOutlineColor(newLane.color.inner);
       let newStartTime = this.checkOverlap(
         track.startTime,
@@ -632,7 +628,8 @@ export default class {
       } else {
         track.setStartTime(newStartTime);
       }
-      oldLane.recalculateEndTime();
+      newLane.addTrack(track);
+
       this.adjustDuration();
       this.drawRequest();
     });
@@ -758,6 +755,9 @@ export default class {
             lane.setDuration(track.duration);
             lane.setEndTime(track.endTime);
             this.lanes.push(lane);
+            if (track.lane === 0) {
+              this.ee.emit("firstTrackLoaded");
+            }
           }
           const laneObject = this.getLaneByID(track.lane);
           track.setWaveOutlineColor(laneObject.color.inner);
@@ -784,7 +784,6 @@ export default class {
     const sTime = newStartTime;
     const eTime = sTime + track.duration;
     const trackStart = oldStartTime;
-    const trackEnd = oldStartTime + track.duration;
     let overlapStart = false;
     let overlapEnd = false;
     this.lanes.forEach((lane) => {
@@ -800,9 +799,22 @@ export default class {
             ) {
               newStartTime = laneTrack.startTime - track.duration;
               overlapEnd = true;
+            } else if (
+              eTime < laneTrack.endTime &&
+              sTime < laneTrack.startTime &&
+              sTime + track.duration > laneTrack.startTime
+            ) {
+              newStartTime = lane.endTime;
+              overlapEnd = true;
             }
           }
         });
+      }
+      if ((overlapEnd && overlapStart && !laneChange) || newStartTime < 0) {
+        newStartTime = trackStart;
+      }
+      if (overlapEnd && overlapStart && laneChange) {
+        newStartTime = newStartTime = lane.endTime;
       }
     });
 
@@ -828,15 +840,15 @@ export default class {
             }
           }
         });
+        if ((overlapEnd && overlapStart && !laneChange) || newStartTime < 0) {
+          newStartTime = trackStart;
+        }
+        if (overlapEnd && overlapStart && laneChange) {
+          newStartTime = newStartTime = lane.endTime;
+        }
       }
     });
 
-    if (overlapEnd && overlapStart && !laneChange) {
-      newStartTime = trackStart;
-    }
-    if (overlapEnd && overlapStart && laneChange) {
-      newStartTime = 0;
-    }
     return newStartTime;
   }
 
@@ -1357,6 +1369,9 @@ export default class {
       this.lanes.push(lane);
       this.adjustDuration();
       this.drawRequest();
+      if (numberLanes === 0) {
+        this.ee.emit("firstTrackLoaded");
+      }
     }
   }
 
