@@ -603,8 +603,13 @@ export default class {
       const newLane = this.getLaneByID(obj.laneId);
       const index = this.mutedTracks.indexOf(track);
 
+      track.setLane(newLane.id);
+      oldLane.removeTrack(track);
+      oldLane.recalculateEndTime();
+      track.setWaveOutlineColor(newLane.color.inner);
       if (!newLane.muted) {
         if (index > -1) {
+          track.setWaveOutlineColor(newLane.color.inner);
           this.mutedTracks.splice(index, 1);
         }
       } else {
@@ -612,11 +617,6 @@ export default class {
           this.mutedTracks.push(track);
         }
       }
-
-      track.setLane(newLane.id);
-      oldLane.removeTrack(track);
-      oldLane.recalculateEndTime();
-      track.setWaveOutlineColor(newLane.color.inner);
       let newStartTime = this.checkOverlap(
         track.startTime,
         track.startTime,
@@ -631,6 +631,22 @@ export default class {
       newLane.addTrack(track);
 
       this.adjustDuration();
+      this.drawRequest();
+    });
+    ee.on("laneMute", (lane) => {
+      lane.tracks.forEach((track) => {
+        const index = this.mutedTracks.indexOf(track);
+        if (!lane.muted) {
+          if (index > -1) {
+            this.mutedTracks.splice(index, 1);
+          }
+        } else {
+          if (index === -1) {
+            this.mutedTracks.push(track);
+          }
+        }
+      });
+      this.adjustTrackPlayout();
       this.drawRequest();
     });
   }
@@ -1091,6 +1107,10 @@ export default class {
 
     if (index > -1) {
       this.mutedTracks.splice(index, 1);
+      this.tracks.forEach((track) => {
+        const trackLane = this.getLaneByID(track.lane);
+        track.setWaveOutlineColor(trackLane.color.inner);
+      });
     } else {
       this.mutedTracks.push(track);
     }
@@ -1653,8 +1673,10 @@ export default class {
               type: "button",
             },
             onclick: () => {
-              lane.muted ? lane.setMuted(false) : lane.setMuted(true);
-              this.drawRequest();
+              lane.muted
+                ? lane.setMuted(false, this)
+                : lane.setMuted(true, this);
+              this.ee.emit("laneMute", lane);
             },
           },
           ["Mute"]
@@ -1732,7 +1754,7 @@ export default class {
 
     const cursor = h("div.playback-indicator", {
       attributes: {
-        style: `position: absolute; width: 2px; height: calc(100% - 27px); margin: 0; padding: 0; top: 27px; left: calc(20px + ${playbackX}px); bottom: 0; z-index: 14; background: #f2765d; cursor: grab;`,
+        style: `position: absolute; width: 2px; height: calc(100% - 28.8px); margin: 0; padding: 0; top: 27px; left: calc(20px + ${playbackX}px); bottom: 0; z-index: 14; background: #f2765d; cursor: grab;`,
       },
     });
 

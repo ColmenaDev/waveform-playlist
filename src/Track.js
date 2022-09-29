@@ -931,11 +931,38 @@ export default class {
       attributes: {
         style: `height: calc(${data.height}px + 16px); width: ${width}px; top: 0; left: calc(${startX}px - ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
       },
+      onmouseover: (evt) => {
+        const channelAfter = evt.target.nextElementSibling.nextElementSibling;
+        const channelBefore = evt.target;
+        const overlay = channelAfter.nextElementSibling;
+        if (overlay.classList.contains("hover")) {
+          overlay.classList.remove("hover");
+          channelAfter.classList.add("no-pointer-events");
+          channelBefore.classList.add("no-pointer-events");
+        }
+      },
+    });
+
+    const channelOverlay = h(`div.channel-overlay`, {
+      attributes: {
+        style: `height: calc(${data.height}px + 19px); width: calc(${width}px + 3px); top: -1px; left:calc(${startX}px - 1px); position: absolute; margin: 0; padding: 0; z-index: 11; pointer-events: none;`,
+      },
     });
 
     const channelAfter = h(`div.channelafter.no-pointer-events`, {
       attributes: {
         style: `height: calc(${data.height}px + 16px); width: ${width}px; top: 0; left:calc(${startX}px + ${width}px); position: absolute; margin: 0; padding: 0; z-index: 11;`,
+      },
+      onmouseover: (evt) => {
+        const channelAfter = evt.target;
+        const channelBefore =
+          evt.target.previousElementSibling.previousElementSibling;
+        const overlay = channelAfter.nextElementSibling;
+        if (overlay.classList.contains("hover")) {
+          overlay.classList.remove("hover");
+          channelAfter.classList.add("no-pointer-events");
+          channelBefore.classList.add("no-pointer-events");
+        }
       },
     });
 
@@ -943,6 +970,7 @@ export default class {
     waveformChildren.push(channels);
     waveformChildren.push(channelAfter);
     waveformChildren.push(this.renderOverlay(data));
+    waveformChildren.push(channelOverlay);
 
     // draw cursor selection on active track.
     if (data.isActive === true) {

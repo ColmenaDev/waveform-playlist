@@ -1,6 +1,5 @@
 import _assign from "lodash.assign";
 import _forOwn from "lodash.forown";
-import Track from "./Track";
 
 export default class {
   constructor() {
@@ -10,6 +9,7 @@ export default class {
     this.gain = 1;
     this.volume = 1;
     this.color = "";
+    this.defaultColor = "";
     this.muted = false;
     this.soloed = false;
     this.duration = 0;
@@ -31,13 +31,11 @@ export default class {
 
   setColor(color) {
     this.color = color;
+    this.defaultColor = this.color.inner;
   }
 
   setMuted(bool) {
     this.muted = bool;
-    this.tracks.forEach((track) => {
-      this.ee.emit("mute", track);
-    });
   }
 
   setEndTime(endTime) {
