@@ -21,57 +21,57 @@ class TimeScale {
 
     this.timeinfo = {
       400000: {
-        marker: 300000,
-        bigStep: 100000,
-        smallStep: 50000,
-        secondStep: 100,
+        marker: 200000,
+        bigStep: 200000,
+        smallStep: 100000,
+        secondStep: 10,
       },
-      100000: {
-        marker: 75000,
+      50000: {
+        marker: 25000,
         bigStep: 25000,
-        smallStep: 12000,
-        secondStep: 25,
+        smallStep: 12500,
+        secondStep: 1,
       },
       20000: {
-        marker: 30000,
+        marker: 10000,
         bigStep: 10000,
-        smallStep: 5000,
-        secondStep: 5,
+        smallStep: 2500,
+        secondStep: 1,
       },
       12000: {
-        marker: 15000,
-        bigStep: 5000,
-        smallStep: 1000,
+        marker: 7000,
+        bigStep: 6000,
+        smallStep: 3000,
         secondStep: 1,
       },
       10000: {
-        marker: 10000,
+        marker: 5000,
         bigStep: 5000,
-        smallStep: 1000,
+        smallStep: 2500,
         secondStep: 1,
       },
       5000: {
-        marker: 5000,
-        bigStep: 1000,
-        smallStep: 500,
+        marker: 3000,
+        bigStep: 2500,
+        smallStep: 1250,
         secondStep: 1 / 2,
       },
       2500: {
-        marker: 2000,
-        bigStep: 1000,
-        smallStep: 500,
+        marker: 1500,
+        bigStep: 1250,
+        smallStep: 625,
         secondStep: 1 / 2,
       },
       1500: {
-        marker: 2000,
-        bigStep: 1000,
-        smallStep: 200,
+        marker: 1000,
+        bigStep: 750,
+        smallStep: 375,
         secondStep: 1 / 5,
       },
-      700: {
-        marker: 1000,
+      1000: {
+        marker: 500,
         bigStep: 500,
-        smallStep: 100,
+        smallStep: 250,
         secondStep: 1 / 10,
       },
     };
@@ -108,11 +108,14 @@ class TimeScale {
   }
 
   render() {
-    const widthX = secondsToPixels(
+    let widthX = secondsToPixels(
       this.duration,
       this.samplesPerPixel,
       this.sampleRate
     );
+    if (widthX < 885) {
+      widthX = 885;
+    }
     const pixPerSec = this.sampleRate / this.samplesPerPixel;
     const pixOffset = secondsToPixels(
       this.offset,
@@ -158,10 +161,26 @@ class TimeScale {
       "div.playlist-time-scale",
       {
         attributes: {
-          style: `position: relative; left: 0; right: 0; margin-left: ${this.marginLeft}px;`,
+          style: `position: relative; left: 0; right: 0; margin-left: ${this.marginLeft}px;pointer-events: none;`,
         },
       },
-      [timeMarkers]
+      [
+        timeMarkers,
+        h("canvas", {
+          attributes: {
+            width: widthX,
+            height: 30,
+            style: "position: absolute; left: 0; right: 0; top: 0; bottom: 0;",
+          },
+          hook: new TimeScaleHook(
+            canvasInfo,
+            this.offset,
+            this.samplesPerPixel,
+            this.duration,
+            this.colors
+          ),
+        }),
+      ]
     );
   }
 }

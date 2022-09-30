@@ -597,6 +597,17 @@ export default class {
       this.setNumberLanes(numberLanes);
     });
 
+    ee.on("setActiveCut", (customID) => {
+      const track =
+        customID && customID !== undefined
+          ? this.getTrackByCustomID(customID)
+          : null;
+      if (track !== undefined) {
+        this.ee.emit("select", track.startTime, track.startTime, track);
+        this.ee.emit("cutSelected");
+      }
+    });
+
     ee.on("handleTrackLaneChange", (obj) => {
       const track = this.getTrackByCustomID(obj.trackId);
       const oldLane = this.getLaneByID(track.lane);
@@ -1772,7 +1783,23 @@ export default class {
       "div.playlist-scrollable",
       {
         attributes: {
-          style: "position: relative;",
+          style: "position: relative; pointer-events: auto;",
+        },
+        onclick: (e) => {
+          if (!e.target.classList.contains("playlist-overlay")) {
+            e.preventDefault();
+            const startX = e.offsetX - 20;
+            const sampleRate = this.sampleRate;
+            const samplesPerPixel = this.samplesPerPixel;
+            const startTime = pixelsToSeconds(
+              startX,
+              samplesPerPixel,
+              sampleRate
+            );
+            if (startTime < this.duration && startTime > 0) {
+              this.ee.emit("select", startTime, startTime, undefined);
+            }
+          }
         },
       },
       scrollableChildren

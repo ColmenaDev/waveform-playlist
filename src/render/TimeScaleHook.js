@@ -30,8 +30,9 @@ export default class {
 
     Object.keys(this.tickInfo).forEach((x) => {
       const scaleHeight = this.tickInfo[x];
+      let reducedHeight = scaleHeight === 10 ? 5 : scaleHeight;
       const scaleY = height - scaleHeight;
-      ctx.fillRect(x, scaleY, 1, scaleHeight);
+      ctx.fillRect(x, scaleY, 1, reducedHeight);
     });
   }
 }
