@@ -113,8 +113,13 @@ class TimeScale {
       this.samplesPerPixel,
       this.sampleRate
     );
-    if (widthX < 885) {
-      widthX = 885;
+    let playerWidth = 885;
+    if (document.querySelector(".audioEdit")) {
+      playerWidth = document.querySelector(".audioEdit").offsetWidth - 233;
+    }
+
+    if (widthX < playerWidth) {
+      widthX = playerWidth;
     }
     const pixPerSec = this.sampleRate / this.samplesPerPixel;
     const pixOffset = secondsToPixels(
