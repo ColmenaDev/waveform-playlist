@@ -7,5 +7,5 @@ bundle:
 	npx webpack
 
 install:
-	install -d /var/www/html/colmena_audio_editor
+	install -d /var/www/html/waveform-playlist
 	cp -r dist/waveform-playlist/* /var/www/html/waveform-playlist
