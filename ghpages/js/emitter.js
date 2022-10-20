@@ -232,6 +232,14 @@ $container.on("click", ".btn-download", function () {
   ee.emit('startaudiorendering', 'wav');
 });
 
+$container.on("click", ".btn-download-mp3", function () {
+  ee.emit('startaudiorendering', 'mp3');
+});
+
+$container.on("click", ".btn-download-opus", function () {
+  ee.emit('startaudiorendering', 'opus');
+});
+
 $container.on("click", ".btn-seektotime", function () {
   var time = parseInt(document.getElementById("seektime").value, 10);
   ee.emit("select", time, time);
@@ -300,14 +308,33 @@ function displayLoadingData(data) {
   $(".loading-data").append(info);
 }
 
-function displayDownloadLink(link) {
+function displayDownloadLink(link, type) {
   var dateString = (new Date()).toISOString();
-  var $link = $("<a/>", {
-    'href': link,
-    'download': 'waveformplaylist' + dateString + '.wav',
-    'text': 'Download mix ' + dateString,
-    'class': 'btn btn-small btn-download-link'
-  });
+
+  if (type == 'wav') {
+    var $link = $("<a/>", {
+      'href': link,
+      'download': 'waveformplaylist' + dateString + '.wav',
+      'text': 'Download mix ' + dateString,
+      'class': 'btn btn-small btn-download-link'
+    });
+  }
+  if (type == 'mp3') {
+    var $link = $("<a/>", {
+      'href': link,
+      'download': 'waveformplaylist' + dateString + '.mp3',
+      'text': 'Download mix ' + dateString,
+      'class': 'btn btn-small btn-download-link'
+    });
+  }
+  if (type == 'opus') {
+    var $link = $("<a/>", {
+      'href': link,
+      'download': 'waveformplaylist' + dateString + '.opus',
+      'text': 'Download mix ' + dateString,
+      'class': 'btn btn-small btn-download-link'
+    });
+  }
 
   $('.btn-download-link').remove();
   $('.btn-download').after($link);
@@ -380,12 +407,13 @@ ee.on("audiosourceserror", function(e) {
 });
 
 ee.on('audiorenderingfinished', function (type, data) {
-  if (type == 'wav'){
+  if (type == 'wav' || type == 'mp3' || type == 'opus'){
     if (downloadUrl) {
       window.URL.revokeObjectURL(downloadUrl);
     }
 
     downloadUrl = window.URL.createObjectURL(data);
+    console.log(downloadUrl);
     displayDownloadLink(downloadUrl);
   }
 });

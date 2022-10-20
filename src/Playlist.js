@@ -675,7 +675,8 @@ export default class {
     if (type === "buffer") {
       this.ee.emit("audiorenderingfinished", type, audioBuffer);
       this.isRendering = false;
-    } else if (type === "wav" || type === "wavRaw") {
+      /* opus does not support 44100 !!! */
+    } else if (type === "wav" || type === "wavRaw" || type === "mp3") {
       this.exportWorker.postMessage({
         command: "init",
         config: {
@@ -700,12 +701,19 @@ export default class {
         buffer: [audioBuffer.getChannelData(0), audioBuffer.getChannelData(1)],
       });
 
-      // ask the worker for a WAV
-      this.exportWorker.postMessage({
-        command: "exportWAV",
-        type: "audio/wav",
-        raw: type === 'wavRaw'
-      });
+      /* opus support not implemented yet */
+      if (type === "mp3") {
+        this.exportWorker.postMessage({
+          command: "exportMP3",
+          type: "audio/mp3"
+        });
+      } else {
+        this.exportWorker.postMessage({
+          command: "exportWAV",
+          type: "audio/wav",
+          raw: type === 'wavRaw'
+        });
+      }
     }
   }
 
