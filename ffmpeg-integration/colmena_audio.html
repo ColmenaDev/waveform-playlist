@@ -1,0 +1,62 @@
+<html>
+  <head>
+    <title>Colmena Audio OPUS Importer</title>
+    <script src="ffmpeg.min.js"></script>
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Upload an audio to transcode to OPUS and play (or download)!</h3>
+    <audio id="output-audio" controls></audio><br/>
+    <input type="file" id="uploader"> <br />
+    <a id="download-link">Download Here</a> </br>
+    <button onClick="cancel()">Cancel</button>
+    <p id="message"></p>
+    <script>
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      let ffmpeg = null;
+
+      const transcode = async ({ target: { files } }) => {
+        if (ffmpeg === null) {
+          ffmpeg = createFFmpeg({ log: true });
+        }
+        const message = document.getElementById('message');
+        const { name } = files[0];
+        message.innerHTML = 'Loading ffmpeg-core.js';
+        if (!ffmpeg.isLoaded()) {
+          await ffmpeg.load();
+        }
+        ffmpeg.FS('writeFile', name, await fetchFile(files[0]));
+        message.innerHTML = 'Start transcoding';
+        await ffmpeg.run('-i', name,  'output.opus');
+        message.innerHTML = 'Complete transcoding';
+        const data = ffmpeg.FS('readFile', 'output.opus');
+
+        const audio = document.getElementById('output-audio');
+        audio.src = URL.createObjectURL(new Blob([data.buffer], { type: 'audio/opus' }));
+        const download_link = document.getElementById('download-link');
+        download_link.href = audio.src;
+        download_link.download = 'arquivo.opus';
+      }
+      const elm = document.getElementById('uploader');
+      elm.addEventListener('change', transcode);
+
+      const cancel = () => {
+        try {
+          ffmpeg.exit();
+        } catch(e) {}
+        ffmpeg = null;
+      }
+    </script>
+  </body>
+</html>
