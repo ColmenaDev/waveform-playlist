@@ -330,7 +330,7 @@ function displayDownloadLink(link, type) {
   if (type == 'opus'){
     var $link = $("<a/>", {
       'href': link,
-      'download': 'waveformplaylist' + dateString + 'opus',
+      'download': 'waveformplaylist' + dateString + '.opus',
       'text': 'Download mix ' + dateString,
       'class': 'btn btn-small btn-download-link'
     });
