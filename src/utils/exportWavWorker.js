@@ -1,4 +1,4 @@
-import lamejs from "lamejs";
+import lamejs from 'lamejs';
 
 export default function () {
   let recLength = 0;
@@ -108,7 +108,7 @@ export default function () {
 
   function wavToMp3(data) {
     const buffer = [];
-    let wavHdr = new lamejs.WavHeader.readHeader(data);
+    let wavHdr = lamejs.WavHeader.readHeader(data);
     const samples = new Int16Array(data, wavHdr.dataOffset, wavHdr.dataLen / 2);
     const channels = wavHdr.channels;
     const sampleRate = wavHdr.sampleRate;
