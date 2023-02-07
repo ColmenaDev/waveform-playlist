@@ -363,6 +363,7 @@ export default class {
       track.calculatePeaks(this.samplesPerPixel, this.sampleRate);
 
       this.setTimeSelection(0, 0);
+      this.adjustDuration();
       this.drawRequest();
     });
 
@@ -636,7 +637,7 @@ export default class {
     }
 
     this.isRendering = true;
-    this.offlineAudioContext = new OfflineAudioContext(
+    this.offlineAudioContext = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
       2,
       44100 * this.duration,
       44100
@@ -800,6 +801,7 @@ export default class {
         list.splice(index, 1);
       }
     });
+    this.adjustDuration();
   }
 
   renameTrack({track, event}) {
@@ -885,7 +887,7 @@ export default class {
     const selected = this.getTimeSelection();
     const playoutPromises = [];
 
-    const start = startTime || this.pausedAt || this.cursor;
+    const start = (startTime === 0) ? 0 : (startTime || this.pausedAt || this.cursor);
     let end = endTime;
 
     if (!end && selected.end !== selected.start && selected.end > start) {
